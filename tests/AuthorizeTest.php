@@ -4,6 +4,7 @@ namespace ChadicusTest\Slim\OAuth2\Routes;
 
 use Chadicus\Slim\OAuth2\Routes\Authorize;
 
+
 /**
  * Unit tests for the \Chadicus\Slim\OAuth2\Routes\Authorize class.
  *
@@ -11,7 +12,7 @@ use Chadicus\Slim\OAuth2\Routes\Authorize;
  * @covers ::<private>
  * @covers ::__construct
  */
-final class AuthorizeTest extends \PHPUnit_Framework_TestCase
+final class AuthorizeTest extends \BasicSlimTestCase
 {
     /**
      * Verify behavior of __invoke() with no client_id parameter
@@ -25,27 +26,16 @@ final class AuthorizeTest extends \PHPUnit_Framework_TestCase
     {
         $storage = new \OAuth2\Storage\Memory([]);
         $server = new \OAuth2\Server($storage, [], []);
+        $slim = new \Slim\App();
+        $slim->get('/authorize', function($request, $response, $args){
+            return $response->getBody()->write('helloworld');
+        })->add(new Authorize($slim, $server));
 
-        \Slim\Environment::mock(
-            [
-                'REQUEST_METHOD' => 'GET',
-                'PATH_INFO' => '/authorize',
-                'QUERY_STRING' => '',
-            ]
-        );
+        $response = $this->runAppRequest($slim, '/authorize');
 
-        $slim = new \Slim\Slim();
-        $slim->get('/authorize', new Authorize($slim, $server));
+        $this->assertSame(400, $response->getStatusCode());
 
-        ob_start();
-
-        $slim->run();
-
-        ob_get_clean();
-
-        $this->assertSame(400, $slim->response->status());
-
-        $actual = json_decode($slim->response->getBody(), true);
+        $actual = json_decode($response->getBody(), true);
         $this->assertSame(
             [
                 'error' => 'invalid_client',
@@ -68,26 +58,14 @@ final class AuthorizeTest extends \PHPUnit_Framework_TestCase
         $storage = new \OAuth2\Storage\Memory([]);
         $server = new \OAuth2\Server($storage, [], []);
 
-        \Slim\Environment::mock(
-            [
-                'REQUEST_METHOD' => 'GET',
-                'PATH_INFO' => '/authorize',
-                'QUERY_STRING' => 'client_id=invalidClientId',
-            ]
-        );
-
-        $slim = new \Slim\Slim();
+        $query = 'client_id=invalidClientId';
+        $slim = new \Slim\App();
         $slim->get('/authorize', new Authorize($slim, $server));
+        $response=$this->runAppRequest($slim, '/authorize', 'GET', $query);
 
-        ob_start();
+        $this->assertSame(400, $response->getStatusCode());
 
-        $slim->run();
-
-        ob_get_clean();
-
-        $this->assertSame(400, $slim->response->status());
-
-        $actual = json_decode($slim->response->getBody(), true);
+        $actual = json_decode($response->getBody()->getContents(), true);
         $this->assertSame(
             [
                 'error' => 'invalid_client',
@@ -125,28 +103,29 @@ final class AuthorizeTest extends \PHPUnit_Framework_TestCase
             []
         );
 
-        \Slim\Environment::mock(
+        $path = '/authorize';
+        $query = 'client_id=testClientId&redirect_uri=http://example.com&response_type=code&'
+                . 'state=test';
+        $body = 'authorized=yes';
+        \Slim\Http\Environment::mock(
             [
                 'REQUEST_METHOD' => 'POST',
-                'PATH_INFO' => '/authorize',
-                'QUERY_STRING' => 'client_id=testClientId&redirect_uri=http://example.com&response_type=code&'
-                . 'state=test',
-                'slim.input' => 'authorized=yes',
+                'PATH_INFO' => $path,
+                'QUERY_STRING' => $query,
+                'slim.input' => $body,
             ]
         );
 
-        $slim = new \Slim\Slim();
-        $slim->map('/authorize', new Authorize($slim, $server))->via('POST', 'GET');
+        $slim = new \Slim\App();
+        $slim->map(['POST', 'GET'], '/authorize', function(){
+            echo('hello');
+        })->add(new Authorize($slim, $server));
 
-        ob_start();
+        $response=$this->runAppRequest($slim, $path, 'POST', $query, [], $body);
 
-        $slim->run();
+        $this->assertSame(302, $response->getStatusCode());
 
-        ob_get_clean();
-
-        $this->assertSame(302, $slim->response->status());
-
-        $location = $slim->response->headers()->get('Location');
+        $location = $response->getHeader('Location')[0];
         $parts = parse_url($location);
         parse_str($parts['query'], $query);
 
@@ -168,17 +147,17 @@ final class AuthorizeTest extends \PHPUnit_Framework_TestCase
         $storage = new \OAuth2\Storage\Memory([]);
         $server = new \OAuth2\Server($storage, [], []);
 
-        \Slim\Environment::mock();
+        \Slim\Http\Environment::mock();
 
-        $slim = new \Slim\Slim();
-
+        $slim = new \Slim\App();
         Authorize::register($slim, $server);
+        $router = $slim->getContainer()->get('router');
 
-        $route = $slim->router()->getNamedRoute('authorize');
+        $route = $router->getNamedRoute('authorize');
 
         $this->assertInstanceOf('\Slim\Route', $route);
         $this->assertInstanceOf('\Chadicus\Slim\OAuth2\Routes\Authorize', $route->getCallable());
-        $this->assertSame([\Slim\Http\Request::METHOD_GET, \Slim\Http\Request::METHOD_POST], $route->getHttpMethods());
+        $this->assertSame(['GET', 'POST'], $route->getMethods());
     }
 
     /**
@@ -203,23 +182,14 @@ final class AuthorizeTest extends \PHPUnit_Framework_TestCase
         );
         $server = new \OAuth2\Server($storage, [], []);
 
-        \Slim\Environment::mock(
-            [
-                'REQUEST_METHOD' => 'GET',
-                'PATH_INFO' => '/authorize',
-                'QUERY_STRING' => 'client_id=testClientId&redirect_uri=http://example.com&response_type=code'
-                . '&state=test',
-            ]
-        );
-
-        $slim = new \Slim\Slim();
+        $query = 'client_id=testClientId&redirect_uri=http://example.com&response_type=code'
+                . '&state=test';
+        $path = '/authorize';
+        $slim=self::mockTwigApp();
         $slim->get('/authorize', new Authorize($slim, $server));
 
-        ob_start();
-
-        $slim->run();
-
-        ob_get_clean();
+        $response=$this->runAppRequest($slim, $path, 'GET', $query);
+	    $response->getBody()->rewind();
 
         $expected = <<<HTML
 <form method="post">
@@ -230,6 +200,6 @@ final class AuthorizeTest extends \PHPUnit_Framework_TestCase
 
 HTML;
 
-        $this->assertSame($expected, $slim->response->getBody());
+        $this->assertSame($expected, $response->getBody()->getContents());
     }
 }

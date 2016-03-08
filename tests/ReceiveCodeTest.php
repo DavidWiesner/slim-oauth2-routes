@@ -11,7 +11,7 @@ use Chadicus\Slim\OAuth2\Routes\ReceiveCode;
  * @covers ::<private>
  * @covers ::__construct
  */
-final class ReceiveCodeTest extends \PHPUnit_Framework_TestCase
+final class ReceiveCodeTest extends \BasicSlimTestCase
 {
     /**
      * Verify basic behavior of __invoke()
@@ -47,32 +47,23 @@ final class ReceiveCodeTest extends \PHPUnit_Framework_TestCase
 
         $code = md5(time());
 
-        \Slim\Environment::mock(
-            [
-                'REQUEST_METHOD' => 'POST',
-                'CONTENT_TYPE' => 'application/json',
-                'PATH_INFO' => '/receive-code',
-                'QUERY_STRING' => "code={$code}&state=xyz",
-            ]
-        );
+        $query = "code={$code}&state=xyz";
+        $contentType = 'application/json';
+        $path = '/receive-code';
 
-        $slim = new \Slim\Slim();
+        $slim = self::mockTwigApp();
         $slim->post('/receive-code', new ReceiveCode($slim));
+        $response = self::runAppRequest($slim, $path, 'POST', $query, [], '', $contentType);
 
-        ob_start();
-
-        $slim->run();
-
-        ob_get_clean();
-
-        $this->assertSame(200, $slim->response->status());
+        $this->assertSame(200, $response->getStatusCode());
 
         $expected = <<<HTML
 <h2>The authorization code is {$code}</h2>
 
 HTML;
+        $response->getBody()->rewind();
 
-        $this->assertSame($expected, $slim->response->getBody());
+        $this->assertSame($expected, $response->getBody()->getContents());
     }
 
     /**
@@ -88,19 +79,17 @@ HTML;
         $storage = new \OAuth2\Storage\Memory([]);
         $server = new \OAuth2\Server($storage, [], []);
 
-        \Slim\Environment::mock();
-
-        $slim = new \Slim\Slim();
+        $slim = new \Slim\App();
 
         ReceiveCode::register($slim);
 
-        $route = $slim->router()->getNamedRoute('receive-code');
+        $route = $slim->getContainer()['router']->getNamedRoute('receive-code');
 
         $this->assertInstanceOf('\Slim\Route', $route);
         $this->assertInstanceOf('\Chadicus\Slim\OAuth2\Routes\ReceiveCode', $route->getCallable());
         $this->assertSame(
-            [\Slim\Http\Request::METHOD_GET, \Slim\Http\Request::METHOD_POST],
-            $route->getHttpMethods()
+            ['GET', 'POST'],
+            $route->getMethods()
         );
     }
 }

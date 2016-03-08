@@ -1,4 +1,4 @@
-<phpunit colors="true" forceCoversAnnotation="true">
+<phpunit colors="true" forceCoversAnnotation="true"  bootstrap="./tests/bootstrap.php">
     <testsuites>
         <testsuite name="Chadicus Slim OAuth2 Routes Test Suite">
             <directory suffix="Test.php">tests</directory>

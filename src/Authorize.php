@@ -4,7 +4,9 @@ namespace Chadicus\Slim\OAuth2\Routes;
 
 use Chadicus\Slim\OAuth2\Http\MessageBridge;
 use OAuth2;
+use Slim\App;
 use Slim\Slim;
+use Symfony\Component\Filesystem\Exception\IOException;
 
 /**
  * Slim route for /authorization endpoint.
@@ -41,7 +43,7 @@ class Authorize
      * @param OAuth2\Server $server   The oauth2 server imstance.
      * @param string        $template The template for /authorize.
      */
-    public function __construct(Slim $slim, OAuth2\Server $server, $template = 'authorize.phtml')
+    public function __construct(App $slim, OAuth2\Server $server, $template = 'authorize.phtml')
     {
         $this->slim = $slim;
         $this->server = $server;
@@ -51,27 +53,32 @@ class Authorize
     /**
      * Call this class as a function.
      *
-     * @return void
+     * @param \Psr\Http\Message\ServerRequestInterface $slimRequest
+     * @param \Psr\Http\Message\ResponseInterface $slimResponse
+     * @param $next
+     * @return \Psr\Http\Message\ResponseInterface
      */
-    public function __invoke()
+    public function __invoke($slimRequest, $slimResponse, $next)
     {
-        $request = MessageBridge::newOAuth2Request($this->slim->request());
+        $request = MessageBridge::newOAuth2Request($slimRequest);
         $response = new OAuth2\Response();
         $isValid = $this->server->validateAuthorizeRequest($request, $response);
         if (!$isValid) {
-            MessageBridge::mapResponse($response, $this->slim->response());
-            return;
+            MessageBridge::mapResponse($response, $slimResponse);
+            return $slimResponse;
         }
 
-        $authorized = $this->slim->request()->params('authorized');
+        $parsedBody = $slimRequest->getParsedBody();
+        $authorized = is_array($parsedBody) && isset($parsedBody['authorized']) ? $parsedBody['authorized'] : '';
         if (empty($authorized)) {
-            $this->slim->render($this->template, ['client_id' => $request->query('client_id', false)]);
-            return;
+            $this->slim->getContainer()['view']->render($slimResponse, $this->template, ['client_id' => $request->query('client_id', false)]);
+            return $slimResponse;
         }
 
         $this->server->handleAuthorizeRequest($request, $response, $authorized === 'yes');
 
-        MessageBridge::mapResponse($response, $this->slim->response());
+        MessageBridge::mapResponse($response, $slimResponse);
+        return $slimResponse;
     }
 
     /**
@@ -83,8 +90,8 @@ class Authorize
      *
      * @return void
      */
-    public static function register(Slim $slim, OAuth2\Server $server, $template = 'authorize.phtml')
+    public static function register(App $slim, OAuth2\Server $server, $template = 'authorize.phtml')
     {
-        $slim->map(self::ROUTE, new self($slim, $server, $template))->via('GET', 'POST')->name('authorize');
+        $slim->map(['GET', 'POST'], self::ROUTE, new self($slim, $server, $template))->setName('authorize');
     }
 }

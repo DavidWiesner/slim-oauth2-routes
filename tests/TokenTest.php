@@ -11,7 +11,7 @@ use Chadicus\Slim\OAuth2\Routes\Token;
  * @covers ::<private>
  * @covers ::__construct
  */
-final class TokenTest extends \PHPUnit_Framework_TestCase
+final class TokenTest extends \BasicSlimTestCase
 {
     /**
      * Verify basic behavior of __invoke()
@@ -52,28 +52,17 @@ final class TokenTest extends \PHPUnit_Framework_TestCase
             ]
         );
 
-        \Slim\Environment::mock(
-            [
-                'REQUEST_METHOD' => 'POST',
-                'CONTENT_TYPE' => 'application/json',
-                'PATH_INFO' => '/token',
-                'CONTENT_LENGTH' => strlen($json),
-                'slim.input' => $json,
-            ]
-        );
+        $contentType = 'application/json';
+        $path = '/token';
 
-        $slim = new \Slim\Slim();
-        $slim->post('/token', new Token($slim, $server));
+        $slim = new \Slim\App();
+        $slim->post($path, new Token($slim, $server));
+        $response=self::runAppRequest($slim, $path,'POST',false,[], $json, $contentType);
+        $response->getBody()->rewind();
 
-        ob_start();
+        $this->assertSame(200, $response->getStatusCode());
+        $actual = json_decode($response->getBody()->getContents(), true);
 
-        $slim->run();
-
-        ob_get_clean();
-
-        $this->assertSame(200, $slim->response->status());
-
-        $actual = json_decode($slim->response->getBody(), true);
         $this->assertSame(
             [
                 'access_token' => $actual['access_token'],
@@ -98,16 +87,14 @@ final class TokenTest extends \PHPUnit_Framework_TestCase
         $storage = new \OAuth2\Storage\Memory([]);
         $server = new \OAuth2\Server($storage, [], []);
 
-        \Slim\Environment::mock();
-
-        $slim = new \Slim\Slim();
+        $slim = new \Slim\App();
 
         Token::register($slim, $server);
 
-        $route = $slim->router()->getNamedRoute('token');
+        $route = $slim->getContainer()['router']->getNamedRoute('token');
 
         $this->assertInstanceOf('\Slim\Route', $route);
         $this->assertInstanceOf('\Chadicus\Slim\OAuth2\Routes\Token', $route->getCallable());
-        $this->assertSame([\Slim\Http\Request::METHOD_POST], $route->getHttpMethods());
+        $this->assertSame(['POST'], $route->getMethods());
     }
 }

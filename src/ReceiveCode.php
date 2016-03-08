@@ -2,7 +2,7 @@
 
 namespace Chadicus\Slim\OAuth2\Routes;
 
-use Slim\Slim;
+use Slim\App;
 
 /**
  * Slim route for oauth2 receive-code.
@@ -31,7 +31,7 @@ final class ReceiveCode
      * @param Slim   $slim     The slim framework application instance.
      * @param string $template The template for /receive-code.
      */
-    public function __construct(Slim $slim, $template = 'receive-code.phtml')
+    public function __construct(App $slim, $template = 'receive-code.phtml')
     {
         $this->slim = $slim;
         $this->template = $template;
@@ -40,23 +40,25 @@ final class ReceiveCode
     /**
      * Call this class as a function.
      *
-     * @return void
+     * @param \Psr\Http\Message\ServerRequestInterface $res
+     * @param \Psr\Http\Message\ResponseInterface $req
+     * @return \Psr\Http\Message\ResponseInterface
      */
-    public function __invoke()
+    public function __invoke($res, $req)
     {
-        $this->slim->render($this->template, ['code' => $this->slim->request()->params('code')]);
+        return $this->slim->getContainer()['view']->render($req, $this->template, ['code' => $res->getQueryParam('code')]);
     }
 
     /**
      * Register this route with the given Slim application and OAuth2 server
      *
-     * @param Slim   $slim     The slim framework application instance.
+     * @param App   $slim     The slim framework application instance.
      * @param string $template The template for /receive-code.
      *
      * @return void
      */
-    public static function register(Slim $slim, $template = 'receive-code.phtml')
+    public static function register(App $slim, $template = 'receive-code.phtml')
     {
-        $slim->map(self::ROUTE, new self($slim, $template))->via('GET', 'POST')->name('receive-code');
+        $slim->map(['GET', 'POST'], self::ROUTE, new self($slim, $template))->setName('receive-code');
     }
 }
