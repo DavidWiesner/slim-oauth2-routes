@@ -5,6 +5,8 @@ namespace Chadicus\Slim\OAuth2\Routes;
 use Chadicus\Slim\OAuth2\Http\MessageBridge;
 use OAuth2;
 use Slim\App;
+use Slim\Http\Request;
+use Slim\Http\Response;
 
 /**
  * Slim route for /token endpoint.
@@ -16,7 +18,7 @@ class Token
     /**
      * The slim framework application.
      *
-     * @var Slim
+     * @var App
      */
     private $slim;
 
@@ -30,7 +32,7 @@ class Token
     /**
      * Create a new instance of the Token route.
      *
-     * @param Slim          $slim   The slim framework application instance.
+     * @param App          $slim   The slim framework application instance.
      * @param OAuth2\Server $server The oauth2 server imstance.
      */
     public function __construct(App $slim, OAuth2\Server $server)
@@ -42,24 +44,24 @@ class Token
     /**
      * Call this class as a function.
      *
-     * @param \Psr\Http\Message\RequestInterface $res
-     * @param \Psr\Http\Message\ResponseInterface $req
-     * @return \Psr\Http\Message\ResponseInterface
+     * @param Request $req
+     * @param Response $res
+     * @return Response
      */
     public function __invoke($req, $res)
     {
         $request = MessageBridge::newOAuth2Request($req);
         MessageBridge::mapResponse(
             $this->server->handleTokenRequest($request), $res);
+        return $res;
     }
 
     /**
      * Register this route with the given Slim application and OAuth2 server
      *
-     * @param Slim          $slim   The slim framework application instance.
+     * @param App $slim The slim framework application instance.
      * @param OAuth2\Server $server The oauth2 server imstance.
      *
-     * @return void
      */
     public static function register(App $slim, OAuth2\Server $server)
     {
